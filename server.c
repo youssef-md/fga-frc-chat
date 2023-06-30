@@ -1,56 +1,97 @@
-// STEP 1 : Create a socket file descriptor
-// STEP 2 : Bind the socket with port and IP
-// STEP 3 : Listen for client request
-// STEP 4 : Accept the TCP connection the client
-// STEP 5 : recv/send for data transfer
-// STEP 6 : Close the socket(fd)
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<unistd.h>
+#include<sys/types.h>
+#include<sys/socket.h>
+#include<netinet/in.h>
+#include<arpa/inet.h>
+#include<netdb.h>
 
-#include <stdio.h>
-#include <sys/socket.h> // Socket system
-#include <netinet/in.h> // Kernet status
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <unistd.h>
-
-#define SERVER_PORT 9000
-#define LISTEN_BACKLOG 5 // MAX CONCURRENT CLIENT CONNECTIONS
+#define BUFSIZE 1024
 
 
-int main(int argc, char *argv[]) {
 
-  if (argc < 3) {
-    printf("Insert the IP and PORT\n");
-    exit(1);
-  }
+void connection_accept(fd_set* master, int* last_fd, int socket_fd, struct sockaddr_in* client_addr, char* client_names[]) {
+	socklen_t addrlen = sizeof(struct sockaddr_in);
+	int new_fd;
 
-  struct sockaddr_in server_addr;
-  struct sockaddr_in client_addr;
-  int server_fd = 0;
-  int connected_fd = 0;
-  int len_sockaddr = sizeof(struct sockaddr);
-  char buffer[1024] = {0};
+	if ((new_fd = accept(socket_fd, (struct sockaddr*)client_addr, &addrlen)) == -1) {
+		perror("Erro no accept()");
+		exit(1);
+	} else {
+		FD_SET(new_fd, master);
 
-  server_fd = socket(AF_INET, SOCK_STREAM, 0);
+		if(new_fd > *last_fd)
+			*last_fd = new_fd;
 
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = inet_addr(argv[1]);
-  server_addr.sin_port = htons(atoi(argv[2]));
+		fflush(stdout);
+		client_names[new_fd] = NULL;
+	}
+}
 
-  bind(server_fd, (struct sockaddr *) &server_addr, len_sockaddr);
-  listen(server_fd, LISTEN_BACKLOG);
+void connect_request(int* socket_fd, struct sockaddr_in* my_addr) {
+	int yes = 1;
 
-  connected_fd = accept(server_fd, (struct sockaddr *) &client_addr, &len_sockaddr);
+	if ((*socket_fd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+		perror("Erro no socket()");
+		exit(1);
+	}
 
+	my_addr->sin_family = AF_INET;
+	my_addr->sin_port = htons(8001);
+	my_addr->sin_addr.s_addr = INADDR_ANY;
+	memset(my_addr->sin_zero, '\0', sizeof(my_addr->sin_zero));
 
-  while(1) {
-    int len_bytes = recv(connected_fd, buffer, sizeof(buffer), 0);
-    if(len_bytes <= 0) continue; // Skip empty message
+	if (bind(*socket_fd, (struct sockaddr*)my_addr, sizeof(struct sockaddr)) == -1) {
+		perror("Erro no bind()");
+		exit(1);
+	}
 
-    printf("Received [%d]: %s\n", len_bytes, buffer);
-  }
+	if (listen(*socket_fd, 10) == -1) {
+		perror("Erro no listen()");
+		exit(1);
+	}
 
-  close(server_fd);
-  close(connected_fd);
+	printf("O servidor TCP está ouvindo por novas conexões...\n");
+	fflush(stdout);
+}
 
-  return 0;
+int main() {
+	struct sockaddr_in my_addr, client_addr;
+	int socket_fd = 0;
+	fd_set master, read_fds;
+	int last_fd, i;
+	char recv_buf[BUFSIZE];
+	char* client_names[FD_SETSIZE];
+
+	for (i = 0; i < FD_SETSIZE; i++)
+		client_names[i] = NULL;
+
+	FD_ZERO(&master);
+	FD_ZERO(&read_fds);
+	connect_request(&socket_fd, &my_addr);
+	FD_SET(socket_fd, &master);
+
+	last_fd = socket_fd;
+
+	while (1) {
+		read_fds = master;
+
+		if (select(last_fd + 1, &read_fds, NULL, NULL, NULL) == -1) {
+			perror("Erro no select()");
+			exit(4);
+		}
+
+		for (i = 0; i <= last_fd; i++) {
+			if (FD_ISSET(i, &read_fds)) {
+				if (i == socket_fd)
+					connection_accept(&master, &last_fd, socket_fd, &client_addr, client_names);
+				else
+					send_recv(i, &master, socket_fd, last_fd, recv_buf, client_names);
+			}
+		}
+	}
+
+	return 0;
 }
