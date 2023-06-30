@@ -10,7 +10,17 @@
 
 #define BUFSIZE 1024
 
-
+void send_to_all(int j, int i, int socket_fd, int nbytes_recvd, char* recv_buf, fd_set* master, char* client_names[]) {
+	if (FD_ISSET(j, master)) {
+		if (j != socket_fd && j != i) {
+			char send_buffer[BUFSIZE];
+			sprintf(send_buffer, "%s: %s", client_names[i], recv_buf);
+		
+			if (send(j, send_buffer, nbytes_recvd + strlen(client_names[i]) + 2, 0) == -1)
+				perror("Erro no send()");
+		}
+	}
+}
 
 void send_recv(int i, fd_set* master, int socket_fd, int last_fd, char* recv_buf, char* client_names[]) {
 	int nbytes_recvd, j;
