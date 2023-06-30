@@ -1,47 +1,48 @@
-// STEP 1 : Create a socket file descriptor
-// STEP 2 : Connect to the TCP server
-// STEP 3 : recv/send for data transfer
-// STEP 4 : Close the socket(fd)
-
 #include <stdio.h>
-#include <sys/socket.h> // Socket system
-#include <netinet/in.h> // Kernet status
-#include <arpa/inet.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <errno.h>
 
-#define SERVER_PORT 9000
+#define BUFSIZE 1024
 
+int main(int argc, char **argv) {
+	int sockfd, last_fd, i;
+	struct sockaddr_in server_addr;
+	fd_set master, read_fds;
+	char client_name[BUFSIZE];
 
-int main(int argc, char *argv[]) {
+	if (argc != 2) {
+		printf("Insira o nome do usuário como parametro!\n");
+		exit(1);
+	}
 
-  if (argc < 3) {
-    printf("Insert the IP and PORT\n");
-    exit(1);
-  }
+	strncpy(client_name, argv[1], BUFSIZE);
+	connect_req(&sockfd, &server_addr, client_name);
+	FD_ZERO(&master);
+	FD_ZERO(&read_fds);
+	FD_SET(0, &master);
+	FD_SET(sockfd, &master);
 
-  struct sockaddr_in server_addr;
-  int client_fd = 0;
-  int len_sockaddr = sizeof(struct sockaddr);
-  char buffer[1024] = {0};
-  strcpy(buffer, "Hello : SERVER");
+	last_fd = sockfd;
 
-  client_fd = socket(AF_INET, SOCK_STREAM, 0);
-  server_addr.sin_family = AF_INET;
-  server_addr.sin_addr.s_addr = inet_addr(argv[1]);
-  server_addr.sin_port = htons(atoi(argv[2]));
-  
-  connect(client_fd, (struct sockaddr *) &server_addr, len_sockaddr);
+	while (1) {
+		read_fds = master;
 
-  while(1) {
-    int len_bytes = send(client_fd, buffer, sizeof(buffer), 0);
-    printf("Sent [%d]: %s\n", len_bytes, buffer);
-    sleep(3);
-  }
+		if (select(last_fd + 1, &read_fds, NULL, NULL, NULL) == -1) {
+			perror("Erro no select()");
+			exit(1);
+		}
 
+		for (i = 0; i <= last_fd; i++) {
+			if (FD_ISSET(i, &read_fds))
+				send_recv(i, sockfd);
+		}
+	}
 
-  close(client_fd);
-
-  return 0;
+	close(sockfd);
+	return 0;
 }
