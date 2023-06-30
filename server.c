@@ -12,6 +12,32 @@
 
 
 
+void send_recv(int i, fd_set* master, int socket_fd, int last_fd, char* recv_buf, char* client_names[]) {
+	int nbytes_recvd, j;
+
+	if ((nbytes_recvd = recv(i, recv_buf, BUFSIZE, 0)) <= 0) {
+		if (nbytes_recvd == 0)
+			printf("O socket %d foi desconectado\n", i);
+		else
+			perror("Erro no recv()");
+		
+		close(i);
+		FD_CLR(i, master);
+		free(client_names[i]);
+		client_names[i] = NULL;
+	} else {
+		if (client_names[i] == NULL) {
+			client_names[i] = malloc(nbytes_recvd + 1);
+			strncpy(client_names[i], recv_buf, nbytes_recvd);
+			client_names[i][nbytes_recvd] = '\0';
+			printf("Socket %d foi conectado com o nome: %s\n", i, client_names[i]);
+		} else {
+			for (j = 0; j <= last_fd; j++)
+				send_to_all(j, i, socket_fd, nbytes_recvd, recv_buf, master, client_names);
+		}
+	}
+}
+
 void connection_accept(fd_set* master, int* last_fd, int socket_fd, struct sockaddr_in* client_addr, char* client_names[]) {
 	socklen_t addrlen = sizeof(struct sockaddr_in);
 	int new_fd;
