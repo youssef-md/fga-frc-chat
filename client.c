@@ -58,6 +58,8 @@ int main(int argc, char **argv) {
 
 	strncpy(client_name, argv[1], BUFSIZE);
 	connect_req(&sockfd, &server_addr, client_name);
+
+	// Inicializa o conjunto de descritores de arquivo
 	FD_ZERO(&master);
 	FD_ZERO(&read_fds);
 	FD_SET(0, &master);

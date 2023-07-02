@@ -11,6 +11,7 @@
 #define BUFSIZE 1024
 
 void send_to_all(int j, int i, int socket_fd, int nbytes_recvd, char* recv_buf, fd_set* master, char* client_names[]) {
+	// Envia a mensagem recebida para todos os clientes conectados, exceto o próprio remetente
 	if (FD_ISSET(j, master)) {
 		if (j != socket_fd && j != i) {
 			char send_buffer[BUFSIZE];
@@ -30,13 +31,14 @@ void send_recv(int i, fd_set* master, int socket_fd, int last_fd, char* recv_buf
 			printf("O socket %d foi desconectado\n", i);
 		else
 			perror("Erro no recv()");
-		
+
 		close(i);
 		FD_CLR(i, master);
 		free(client_names[i]);
 		client_names[i] = NULL;
 	} else {
 		if (client_names[i] == NULL) {
+			// Recebe o nome do usuário como primeira mensagem e atualiza o array
 			client_names[i] = malloc(nbytes_recvd + 1);
 			strncpy(client_names[i], recv_buf, nbytes_recvd);
 			client_names[i][nbytes_recvd] = '\0';
@@ -56,6 +58,7 @@ void connection_accept(fd_set* master, int* last_fd, int socket_fd, struct socka
 		perror("Erro no accept()");
 		exit(1);
 	} else {
+		// Atualiza o conjunto de descritores de arquivo com a nova conexão
 		FD_SET(new_fd, master);
 
 		if(new_fd > *last_fd)
@@ -104,6 +107,7 @@ int main() {
 	for (i = 0; i < FD_SETSIZE; i++)
 		client_names[i] = NULL;
 
+	// Inicializa os conjuntos de descritores de arquivo
 	FD_ZERO(&master);
 	FD_ZERO(&read_fds);
 	connect_request(&socket_fd, &my_addr);
@@ -114,6 +118,7 @@ int main() {
 	while (1) {
 		read_fds = master;
 
+		// Espera por atividade em algum dos descritores de arquivo
 		if (select(last_fd + 1, &read_fds, NULL, NULL, NULL) == -1) {
 			perror("Erro no select()");
 			exit(4);
